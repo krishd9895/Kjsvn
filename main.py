@@ -9,14 +9,18 @@ from webserver import keep_alive
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# Dictionary to store user states
+user_states = {}
+
+# Define a list to store filenames of files being processed
+processing_files = []
 
 def cleanup():
     # Delete any temporary files in the current directory
     for filename in os.listdir():
         if filename.endswith(".jpg") or filename.endswith(".m4a") or filename.endswith(".mp3") or filename.endswith(".mp4") or filename.endswith(".webm"):
-            os.remove(filename)
-
-
+            if filename not in processing_files:  # Check if the file is not currently being processed
+                os.remove(filename)
 
 def download_song(url, chat_id, message_id):
     ydl_opts = {
@@ -79,12 +83,18 @@ def extract_json(url, chat_id, message_id):
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
+    user_states[message.chat.id] = {"downloading": False}
     bot.reply_to(message, "Hello! Please send me a song URL")
 
 @bot.message_handler(func=lambda message: True)
 def handle_song_url(message):
-    url = message.text
     chat_id = message.chat.id
+    if user_states[chat_id]["downloading"]:
+        bot.reply_to(message, "Sorry, I'm currently processing another request. Please wait.")
+        return
+
+    user_states[chat_id]["downloading"] = True
+    url = message.text
     sent_message = bot.send_message(chat_id, "Processing...")
 
     json_data = extract_json(url, chat_id, sent_message.id)
@@ -93,13 +103,14 @@ def handle_song_url(message):
         if filename:
             add_metadata(json_data, filename, chat_id, sent_message.id)
             with open(filename, 'rb') as song_file:
-                # Construct caption with song title and quality
                 caption = f"{info['title']} - {info['abr']} kbps" if 'abr' in info else info['title']
                 bot.send_audio(chat_id, song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
-            os.remove(filename)  # Remove the file after upload
-            bot.delete_message(chat_id, sent_message.id)  # Delete the "Processing...!" message
+            os.remove(filename)
+            bot.delete_message(chat_id, sent_message.id)
     else:
         bot.edit_message_text("Error: Unable to extract metadata or download the song.", chat_id, sent_message.id)
+    
+    user_states[chat_id]["downloading"] = False
 
 # Cleanup at the beginning of the script
 cleanup()
