@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 from mutagen.mp4 import MP4, MP4Cover
 from yt_dlp import YoutubeDL
@@ -86,7 +87,10 @@ def send_welcome(message):
     user_states[message.chat.id] = {"downloading": False}
     bot.reply_to(message, "Hello! Please send me a song URL")
 
-@bot.message_handler(func=lambda message: True)
+# Define a regular expression pattern to match URLs
+url_pattern = re.compile(r'^https?://\S+$')
+
+@bot.message_handler(func=lambda message: message.text and url_pattern.match(message.text))
 def handle_song_url(message):
     chat_id = message.chat.id
     if user_states[chat_id]["downloading"]:
