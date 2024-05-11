@@ -3,6 +3,7 @@ import requests
 from mutagen.mp4 import MP4, MP4Cover
 from yt_dlp import YoutubeDL
 import telebot
+from webserver import keep_alive
 
 # Replace YOUR_BOT_TOKEN with your actual Telegram Bot token
 BOT_TOKEN = os.environ["BOT_TOKEN"]
@@ -103,7 +104,7 @@ def handle_song_url(message):
 # Cleanup at the beginning of the script
 cleanup()
 
-
+keep_alive()
 # Start the bot and keep it running
 while True:
     try:
