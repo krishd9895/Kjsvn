@@ -95,6 +95,13 @@ def handle_song_url(message):
 
     user_states[chat_id]["downloading"] = True
     url = message.text
+
+    # Check if the URL is a playlist URL
+    if "playlist" in url.lower():
+        bot.reply_to(message, "Sorry, I cannot process playlist URLs. Please send me a single song URL.")
+        user_states[chat_id]["downloading"] = False
+        return
+
     sent_message = bot.send_message(chat_id, "Processing...")
 
     json_data = extract_json(url, chat_id, sent_message.id)
