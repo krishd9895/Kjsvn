@@ -33,7 +33,7 @@ def download_song(url, chat_id, message_id):
         try:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            bot.edit_message_text(f"Song downloaded successfully as: {filename}", chat_id, message_id)
+            bot.edit_message_text(f"Uploading as: {filename}", chat_id, message_id)
             return filename, info
         except Exception as e:
             bot.edit_message_text(f"Error downloading the song: {str(e)}", chat_id, message_id)
@@ -76,7 +76,7 @@ def extract_json(url, chat_id, message_id):
     with YoutubeDL(ydl_opts) as ydl:
         try:
             result = ydl.extract_info(url, download=False)
-            bot.edit_message_text("JSON metadata extracted successfully!", chat_id, message_id)
+            bot.edit_message_text("metadata extracted successfully!", chat_id, message_id)
             return result
         except Exception as e:
             bot.edit_message_text(f"Error extracting JSON metadata: {str(e)}", chat_id, message_id)
