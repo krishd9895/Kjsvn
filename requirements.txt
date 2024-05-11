@@ -1,0 +1,6 @@
+mutagen==1.47.0
+pyTelegramBotAPI==4.17.0
+requests==2.31.0
+urllib3==2.2.1
+yt-dlp==2024.4.9
+bottle==0.12.25
