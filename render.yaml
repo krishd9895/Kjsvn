@@ -1,0 +1,3 @@
+# render.yaml
+buildCommand: python -m pip install -r requirements.txt
+startCommand: python main.py
