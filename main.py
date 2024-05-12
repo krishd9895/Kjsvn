@@ -28,7 +28,7 @@ url_pattern = re.compile(r'^https?://\S+$')
 def cleanup():
     # Delete any temporary files in the current directory
     for filename in os.listdir():
-        if filename.endswith(".jpg") or filename.endswith(".m4a") or filename.endswith(".mp3") or filename.endswith(".mp4") or filename.endswith(".webm"):
+        if filename.endswith(".jpg") or filename.endswith(".m4a") or filename.endswith(".mp3") or filename.endswith(".mp4") or filename.endswith(".mkv") or filename.endswith(".webm"):
             if filename not in processing_files:  # Check if the file is not currently being processed
                 os.remove(filename)
 # Handle start command
