@@ -102,27 +102,25 @@ async def handle_text_message(client, message):
 async def search_and_send_results(chat_id, song_name, number_of_results=3):
     data = await saavn.search_songs(song_name)
 
-    if data and 'data' in data and data['data']:
-        results = data['data'][:number_of_results]  # Get only the required number of results
+    if data and data["status"] == "SUCCESS" and data["data"]:
+        results = data["data"][:number_of_results]  # Get only the required number of results
 
         for result in results:
-            title = result.get('title', '')
-            album = result.get('album', '')
-            url = result.get('url', '')
-            primary_artists = result['more_info'].get('primary_artists', '')
-            language = result['more_info'].get('language', '')
-
-            # Generate a unique ID and store song information
-            unique_id = str(uuid.uuid4())
-            song_info_dict[unique_id] = {"url": url, "primary_artists": primary_artists}
+            title = result.get("title", "")
+            album = result.get("album", "")
+            url = result.get("url", "")
+            primary_artists = result["more_info"].get("primary_artists", "")
+            language = result["more_info"].get("language", "")
 
             # Create an inline keyboard button for downloading the song
+            unique_id = str(uuid.uuid4())
+            song_info_dict[unique_id] = {"url": url, "primary_artists": primary_artists, "language": language}
+
             download_button = InlineKeyboardButton("Download", callback_data=f"download|{unique_id}")
             reply_markup = InlineKeyboardMarkup([[download_button]])
 
             response = f"Title: {title}\nAlbum: {album}\nPrimary Artists: {primary_artists}\nLanguage: {language}"
             await app.send_message(chat_id, response, reply_markup=reply_markup)
-
 # Handle button clicks
 @app.on_callback_query(filters.regex(r"^download\|"))
 async def download_callback(client, callback_query):
