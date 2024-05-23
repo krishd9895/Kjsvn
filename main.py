@@ -6,6 +6,9 @@ from mutagen.mp4 import MP4, MP4Cover
 from yt_dlp import YoutubeDL
 from pyrogram import Client, filters
 from jiosaavn import JioSaavn
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+import uuid
+
 
 
 # Initialize Pyrogram Client
@@ -22,6 +25,10 @@ user_states = {}
 
 # Define a list to store filenames of files being processed
 processing_files = []
+
+# Dictionary to store mapping between unique IDs and song information
+song_info_dict = {}
+
 
 # Regular expression pattern to match URLs
 url_pattern = re.compile(r'http\S+')
@@ -90,6 +97,9 @@ async def handle_text_message(client, message):
     song_name = message.text
     await search_and_send_results(message.chat.id, song_name)
     
+
+
+
 # Function to search for songs and send results
 async def search_and_send_results(chat_id, song_name, number_of_results=3):
     data = await saavn.search_songs(song_name)
@@ -97,16 +107,67 @@ async def search_and_send_results(chat_id, song_name, number_of_results=3):
     if data and 'data' in data and data['data']:
         results = data['data'][:number_of_results]  # Get only the required number of results
 
-        response = ""
         for result in results:
             title = result.get('title', '')
             album = result.get('album', '')
             url = result.get('url', '')
             primary_artists = result['more_info'].get('primary_artists', '')
             language = result['more_info'].get('language', '')
-            response += f"Title: {title}\nAlbum: {album}\nURL: {url}\nPrimary Artists: {primary_artists}\nLanguage: {language}\n\n"
 
-        await app.send_message(chat_id, response)
+            # Generate a unique ID and store song information
+            unique_id = str(uuid.uuid4())
+            song_info_dict[unique_id] = {"url": url, "primary_artists": primary_artists}
+
+            # Create an inline keyboard button for downloading the song
+            download_button = InlineKeyboardButton("Download", callback_data=f"download|{unique_id}")
+            reply_markup = InlineKeyboardMarkup([[download_button]])
+
+            response = f"Title: {title}\nAlbum: {album}\nPrimary Artists: {primary_artists}\nLanguage: {language}"
+            await app.send_message(chat_id, response, reply_markup=reply_markup)
+
+# Handle button clicks
+@app.on_callback_query(filters.regex(r"^download\|"))
+async def download_callback(client, callback_query):
+    chat_id = callback_query.message.chat.id
+    data = callback_query.data.split("|")
+    unique_id = data[1]
+
+    if unique_id not in song_info_dict:
+        await callback_query.answer("Invalid song ID", show_alert=True)
+        return
+
+    url = song_info_dict[unique_id]["url"]
+    primary_artists = song_info_dict[unique_id]["primary_artists"]
+
+    # Rest of the code remains the same...
+    if chat_id not in user_states:
+        user_states[chat_id] = {"downloading": False}
+
+    if user_states[chat_id]["downloading"]:
+        await callback_query.answer("Sorry, I'm currently processing another request. Please wait.", show_alert=True)
+        return
+
+    user_states[chat_id]["downloading"] = True
+
+    sent_message = await callback_query.message.reply("Processing...")
+
+    # Extract metadata from the URL
+    json_data = await extract_json(url, chat_id, sent_message.id)
+    if json_data:
+        filename, info = await download_song(url, chat_id, sent_message.id)
+        if filename:
+            json_data["artist"] = primary_artists  # Set the primary artists info
+            await add_metadata(json_data, filename, chat_id, sent_message.id)
+            with open(filename, 'rb') as song_file:
+                caption = f"{info['title']} - {info['abr']} kbps" if 'abr' in info else info['title']
+                await callback_query.message.reply_audio(song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
+            os.remove(filename)
+            await sent_message.delete()
+    else:
+        await sent_message.edit("Error: Unable to extract metadata or download the song.")
+
+    user_states[chat_id]["downloading"] = False
+    await callback_query.answer()    
 
 # Function to download song from URL
 async def download_song(url, chat_id, message_id):
