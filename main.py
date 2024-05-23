@@ -8,7 +8,7 @@ from pyrogram import Client, filters
 from jiosaavn import JioSaavn
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import uuid
-
+from webserver import keep_alive
 
 # Initialize Pyrogram Client
 API_ID = os.environ["API_ID"]
@@ -251,5 +251,6 @@ async def extract_json(url, chat_id, message_id):
 # Cleanup at the beginning of the script
 cleanup()
 
+keep_alive()
 # Start the bot and keep it running
 app.run()
