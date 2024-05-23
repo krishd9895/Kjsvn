@@ -6,3 +6,4 @@ yt-dlp
 bottle==0.12.25
 jiosaavn-python==0.2
 asyncio==3.4.3
+TgCrypto
