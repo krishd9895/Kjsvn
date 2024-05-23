@@ -14,6 +14,8 @@ API_ID = os.environ["API_ID"]
 API_HASH = os.environ["API_HASH"]
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 app = Client("my_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# Set upload methods with increased timeout
+app.set_upload_methods(concurrent_upload=True, concurrent_uploads=4, upload_workers=4, upload_timeout=600)
 
 # Initialize JioSaavn
 saavn = JioSaavn()
