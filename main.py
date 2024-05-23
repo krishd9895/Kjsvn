@@ -6,16 +6,12 @@ from mutagen.mp4 import MP4, MP4Cover
 from yt_dlp import YoutubeDL
 from pyrogram import Client, filters
 from jiosaavn import JioSaavn
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-import uuid
 
 # Initialize Pyrogram Client
 API_ID = os.environ["API_ID"]
 API_HASH = os.environ["API_HASH"]
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 app = Client("my_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-# Set upload methods with increased timeout
-app.set_upload_methods(concurrent_upload=True, concurrent_uploads=4, upload_workers=4, upload_timeout=600)
 
 # Initialize JioSaavn
 saavn = JioSaavn()
@@ -25,10 +21,6 @@ user_states = {}
 
 # Define a list to store filenames of files being processed
 processing_files = []
-
-# Dictionary to store mapping between unique IDs and song information
-song_info_dict = {}
-
 
 # Regular expression pattern to match URLs
 url_pattern = re.compile(r'http\S+')
@@ -97,83 +89,24 @@ async def handle_text_message(client, message):
     song_name = message.text
     await search_and_send_results(message.chat.id, song_name)
     
-
-
-
 # Function to search for songs and send results
 async def search_and_send_results(chat_id, song_name, number_of_results=3):
     data = await saavn.search_songs(song_name)
 
-    if data and data["status"] == "SUCCESS" and data["data"]:
-        results = data["data"][:number_of_results]  # Get only the required number of results
+    if data and 'data' in data and data['data']:
+        results = data['data'][:number_of_results]  # Get only the required number of results
 
+        response = ""
         for result in results:
-            title = result.get("title", "")
-            album = result.get("album", "")
-            url = result.get("url", "")
-            primary_artists = result["more_info"].get("primary_artists", "")
-            language = result["more_info"].get("language", "")
+            title = result.get('title', '')
+            album = result.get('album', '')
+            url = result.get('url', '')
+            primary_artists = result['more_info'].get('primary_artists', '')
+            language = result['more_info'].get('language', '')
+            response += f"Title: {title}\nAlbum: {album}\nURL: {url}\nPrimary Artists: {primary_artists}\nLanguage: {language}\n\n"
 
-            # Create an inline keyboard button for downloading the song
-            unique_id = str(uuid.uuid4())
-            song_info_dict[unique_id] = {"url": url, "primary_artists": primary_artists, "language": language}
+        await app.send_message(chat_id, response)
 
-            download_button = InlineKeyboardButton("Download", callback_data=f"download|{unique_id}")
-            reply_markup = InlineKeyboardMarkup([[download_button]])
-
-            response = f"Title: {title}\nAlbum: {album}\nPrimary Artists: {primary_artists}\nLanguage: {language}"
-            await app.send_message(chat_id, response, reply_markup=reply_markup)
-# Handle button clicks
-@app.on_callback_query(filters.regex(r"^download\|"))
-async def download_callback(client, callback_query):
-    chat_id = callback_query.message.chat.id
-    data = callback_query.data.split("|")
-    unique_id = data[1]
-
-    if unique_id not in song_info_dict:
-        await callback_query.answer("Invalid song ID", show_alert=True)
-        return
-
-    url = song_info_dict[unique_id]["url"]
-    primary_artists = song_info_dict[unique_id].get("primary_artists", "Unknown Artist")
-    language = song_info_dict[unique_id].get("language", "Unknown Language")
-
-    if chat_id not in user_states:
-        user_states[chat_id] = {"downloading": False}
-
-    try:
-        # Answer the callback query first
-        await callback_query.answer()
-    except pyrogram.errors.exceptions.bad_request_400.QueryIdInvalid:
-        # If the callback query is invalid, return
-        return
-
-    if user_states[chat_id]["downloading"]:
-        await callback_query.answer("Sorry, I'm currently processing another request. Please wait.", show_alert=True)
-        return
-
-    user_states[chat_id]["downloading"] = True
-
-    sent_message = await callback_query.message.reply("Processing...")
-
-    # Extract metadata from the URL
-    json_data = await extract_json(url, chat_id, sent_message.id)
-    if json_data:
-        filename, info = await download_song(url, chat_id, sent_message.id)
-        if filename:
-            json_data["artist"] = primary_artists
-            json_data["language"] = language
-            await add_metadata(json_data, filename, chat_id, sent_message.id)
-            with open(filename, 'rb') as song_file:
-                caption = f"{info['title']} - {info['abr']} kbps" if 'abr' in info else info['title']
-                await callback_query.message.reply_audio(song_file, title=info["title"], performer=json_data.get("artist", "Unknown Artist"), caption=caption)
-            os.remove(filename)
-            await sent_message.delete()
-    else:
-        await sent_message.edit("Error: Unable to extract metadata or download the song.")
-
-    user_states[chat_id]["downloading"] = False
-    
 # Function to download song from URL
 async def download_song(url, chat_id, message_id):
     ydl_opts = {
@@ -194,43 +127,32 @@ async def download_song(url, chat_id, message_id):
 # Function to add metadata to downloaded song
 async def add_metadata(json_data, song_filename, chat_id, message_id):
     try:
-        unique_id = json_data.get("unique_id")
-        if unique_id and unique_id in song_info_dict:
-            song_info = song_info_dict[unique_id]
-            artist = song_info.get("primary_artists", "Unknown Artist")
-            language = song_info.get("language", "Unknown Language")
-        else:
-            artist = "Unknown Artist"
-            language = "Unknown Language"
-
         # Add metadata to the downloaded song
         audio = MP4(song_filename)
-        audio["\xa9nam"] = json_data.get("title", "Unknown Title")
-        audio["\xa9ART"] = artist
+        audio["\xa9nam"] = json_data["title"]
+        audio["\xa9ART"] = json_data.get("artist", "Unknown Artist")
         audio["\xa9alb"] = json_data.get("album", "Unknown Album")
         audio["\xa9day"] = str(json_data.get("release_year", "Unknown Year"))
-        audio["\xa9gen"] = language
         audio.save()
 
         # Download thumbnail
-        if "thumbnails" in json_data and json_data["thumbnails"]:
-            thumbnail_url = json_data["thumbnails"][0]["url"]
-            thumbnail_response = requests.get(thumbnail_url)
+        thumbnail_url = json_data["thumbnails"][0]["url"]
+        thumbnail_response = requests.get(thumbnail_url)
 
-            # Add thumbnail to the song file
-            with open("temp.jpg", "wb") as f:
-                f.write(thumbnail_response.content)
+        # Add thumbnail to the song file
+        with open("temp.jpg", "wb") as f:
+            f.write(thumbnail_response.content)
 
-            audio["covr"] = [
-                MP4Cover(open("temp.jpg", "rb").read(), MP4Cover.FORMAT_JPEG)
-            ]
-            audio.save()
+        audio["covr"] = [
+            MP4Cover(open("temp.jpg", "rb").read(), MP4Cover.FORMAT_JPEG)
+        ]
+        audio.save()
 
-            # Remove temporary thumbnail file
-            os.remove("temp.jpg")
-
+        # Remove temporary thumbnail file
+        os.remove("temp.jpg")
     except Exception as e:
         await app.edit_message_text(chat_id, message_id, f"Error adding metadata: {str(e)}")
+
 # Function to extract JSON metadata from URL
 async def extract_json(url, chat_id, message_id):
     ydl_opts = {
@@ -241,7 +163,7 @@ async def extract_json(url, chat_id, message_id):
     with YoutubeDL(ydl_opts) as ydl:
         try:
             result = ydl.extract_info(url, download=False)
-            await app.edit_message_text(chat_id, message_id, "adding metadata..!")
+            await app.edit_message_text(chat_id, message_id, "metadata extracted successfully!")
             return result
         except Exception as e:
             await app.edit_message_text(chat_id, message_id, f"Error extracting JSON metadata: {str(e)}")
@@ -250,6 +172,5 @@ async def extract_json(url, chat_id, message_id):
 # Cleanup at the beginning of the script
 cleanup()
 
-
 # Start the bot and keep it running
-app.run()
+app.run() 
