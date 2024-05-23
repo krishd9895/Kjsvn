@@ -242,7 +242,7 @@ async def extract_json(url, chat_id, message_id):
     with YoutubeDL(ydl_opts) as ydl:
         try:
             result = ydl.extract_info(url, download=False)
-            await app.edit_message_text(chat_id, message_id, "adding metadat..!")
+            await app.edit_message_text(chat_id, message_id, "adding metadata..!")
             return result
         except Exception as e:
             await app.edit_message_text(chat_id, message_id, f"Error extracting JSON metadata: {str(e)}")
