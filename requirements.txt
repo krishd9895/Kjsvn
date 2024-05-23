@@ -1,8 +1,8 @@
-mutagen==1.47.0
-pyTelegramBotAPI==4.17.0
+mutagen
+pyrogram
 requests==2.31.0
 urllib3==2.2.1
-yt-dlp==2024.4.9
+yt-dlp
 bottle==0.12.25
 jiosaavn-python==0.2
 asyncio==3.4.3
