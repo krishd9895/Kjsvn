@@ -1,9 +1,8 @@
 mutagen
-pyrogram
+pyTelegramBotAPI
 requests==2.31.0
 urllib3==2.2.1
 yt-dlp
 bottle==0.12.25
 jiosaavn-python==0.2
 asyncio==3.4.3
-TgCrypto
