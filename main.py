@@ -10,7 +10,6 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import uuid
 
 
-
 # Initialize Pyrogram Client
 API_ID = os.environ["API_ID"]
 API_HASH = os.environ["API_HASH"]
@@ -137,11 +136,18 @@ async def download_callback(client, callback_query):
         return
 
     url = song_info_dict[unique_id]["url"]
-    primary_artists = song_info_dict[unique_id]["primary_artists"]
+    primary_artists = song_info_dict[unique_id].get("primary_artists", "Unknown Artist")
+    language = song_info_dict[unique_id].get("language", "Unknown Language")
 
-    # Rest of the code remains the same...
     if chat_id not in user_states:
         user_states[chat_id] = {"downloading": False}
+
+    try:
+        # Answer the callback query first
+        await callback_query.answer()
+    except pyrogram.errors.exceptions.bad_request_400.QueryIdInvalid:
+        # If the callback query is invalid, return
+        return
 
     if user_states[chat_id]["downloading"]:
         await callback_query.answer("Sorry, I'm currently processing another request. Please wait.", show_alert=True)
@@ -156,19 +162,19 @@ async def download_callback(client, callback_query):
     if json_data:
         filename, info = await download_song(url, chat_id, sent_message.id)
         if filename:
-            json_data["artist"] = primary_artists  # Set the primary artists info
+            json_data["artist"] = primary_artists
+            json_data["language"] = language
             await add_metadata(json_data, filename, chat_id, sent_message.id)
             with open(filename, 'rb') as song_file:
                 caption = f"{info['title']} - {info['abr']} kbps" if 'abr' in info else info['title']
-                await callback_query.message.reply_audio(song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
+                await callback_query.message.reply_audio(song_file, title=info["title"], performer=json_data.get("artist", "Unknown Artist"), caption=caption)
             os.remove(filename)
             await sent_message.delete()
     else:
         await sent_message.edit("Error: Unable to extract metadata or download the song.")
 
     user_states[chat_id]["downloading"] = False
-    await callback_query.answer()    
-
+    
 # Function to download song from URL
 async def download_song(url, chat_id, message_id):
     ydl_opts = {
@@ -189,32 +195,43 @@ async def download_song(url, chat_id, message_id):
 # Function to add metadata to downloaded song
 async def add_metadata(json_data, song_filename, chat_id, message_id):
     try:
+        unique_id = json_data.get("unique_id")
+        if unique_id and unique_id in song_info_dict:
+            song_info = song_info_dict[unique_id]
+            artist = song_info.get("primary_artists", "Unknown Artist")
+            language = song_info.get("language", "Unknown Language")
+        else:
+            artist = "Unknown Artist"
+            language = "Unknown Language"
+
         # Add metadata to the downloaded song
         audio = MP4(song_filename)
-        audio["\xa9nam"] = json_data["title"]
-        audio["\xa9ART"] = json_data.get("artist", "Unknown Artist")
+        audio["\xa9nam"] = json_data.get("title", "Unknown Title")
+        audio["\xa9ART"] = artist
         audio["\xa9alb"] = json_data.get("album", "Unknown Album")
         audio["\xa9day"] = str(json_data.get("release_year", "Unknown Year"))
+        audio["\xa9gen"] = language
         audio.save()
 
         # Download thumbnail
-        thumbnail_url = json_data["thumbnails"][0]["url"]
-        thumbnail_response = requests.get(thumbnail_url)
+        if "thumbnails" in json_data and json_data["thumbnails"]:
+            thumbnail_url = json_data["thumbnails"][0]["url"]
+            thumbnail_response = requests.get(thumbnail_url)
 
-        # Add thumbnail to the song file
-        with open("temp.jpg", "wb") as f:
-            f.write(thumbnail_response.content)
+            # Add thumbnail to the song file
+            with open("temp.jpg", "wb") as f:
+                f.write(thumbnail_response.content)
 
-        audio["covr"] = [
-            MP4Cover(open("temp.jpg", "rb").read(), MP4Cover.FORMAT_JPEG)
-        ]
-        audio.save()
+            audio["covr"] = [
+                MP4Cover(open("temp.jpg", "rb").read(), MP4Cover.FORMAT_JPEG)
+            ]
+            audio.save()
 
-        # Remove temporary thumbnail file
-        os.remove("temp.jpg")
+            # Remove temporary thumbnail file
+            os.remove("temp.jpg")
+
     except Exception as e:
         await app.edit_message_text(chat_id, message_id, f"Error adding metadata: {str(e)}")
-
 # Function to extract JSON metadata from URL
 async def extract_json(url, chat_id, message_id):
     ydl_opts = {
@@ -225,7 +242,7 @@ async def extract_json(url, chat_id, message_id):
     with YoutubeDL(ydl_opts) as ydl:
         try:
             result = ydl.extract_info(url, download=False)
-            await app.edit_message_text(chat_id, message_id, "metadata extracted successfully!")
+            await app.edit_message_text(chat_id, message_id, "adding metadat..!")
             return result
         except Exception as e:
             await app.edit_message_text(chat_id, message_id, f"Error extracting JSON metadata: {str(e)}")
