@@ -6,7 +6,7 @@ from mutagen.mp4 import MP4, MP4Cover
 from yt_dlp import YoutubeDL
 import telebot
 from jiosaavn import JioSaavn
-from webserver import keep_alive
+
 
 # Initialize Telebot
 BOT_TOKEN = os.environ["BOT_TOKEN"]
@@ -166,7 +166,6 @@ def contains_url(text):
 # Cleanup at the beginning of the script
 cleanup()
 
-keep_alive()
 # Start the bot and keep it running
 while True:
     try:
