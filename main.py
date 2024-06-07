@@ -118,6 +118,7 @@ async def search_and_send_results(chat_id, song_name):
         response = f"Title: {title}\nAlbum: {album}\nURL: {url}\nPrimary Artists: {primary_artists}\nLanguage: {language}"
         await app.send_message(chat_id, response)
 
+
 # Function to download song from URL
 async def download_song(url, chat_id, message_id):
     ydl_opts = {
@@ -137,12 +138,13 @@ async def download_song(url, chat_id, message_id):
             filename = ydl.prepare_filename(info)
             sanitized_filename = sanitize_filename(filename)
             os.rename(filename, sanitized_filename)  # Rename the file to the sanitized filename
-            await app.edit_message_text("Uploading...", chat_id, message_id)  # Simpler message text
+            await app.edit_message_text(f"Uploading as: {sanitized_filename}", chat_id, message_id)  # Corrected the parameters
             return sanitized_filename, info
         except Exception as e:
-            await app.edit_message_text(f"Error downloading the song: {str(e)}", chat_id, message_id)
+            await app.edit_message_text(f"Error downloading the song: {str(e)}", chat_id, message_id)  # Corrected the parameters
             logging.error(f"Error downloading the song: {str(e)}")
             return None, None
+
 
 # Function to add metadata to downloaded song
 async def add_metadata(json_data, song_filename, chat_id, message_id):
