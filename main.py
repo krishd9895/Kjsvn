@@ -6,7 +6,6 @@ import logging
 from mutagen.mp4 import MP4, MP4Cover
 from yt_dlp import YoutubeDL
 from pyrogram import Client, filters
-from jiosaavn import JioSaavn
 from webserver import keep_alive
 
 # Setup logging
@@ -23,9 +22,6 @@ api_id = os.environ["API_ID"]
 api_hash = os.environ["API_HASH"]
 
 app = Client("my_bot", bot_token=BOT_TOKEN, api_id=api_id, api_hash=api_hash)
-
-# Initialize JioSaavn
-saavn = JioSaavn()
 
 # Dictionary to store user states
 user_states = {}
@@ -116,32 +112,36 @@ async def download_and_add_metadata(url, chat_id, sent_message):
             await sent_message.edit_text("Downloading and adding metadata...")
 
             # Add metadata to the downloaded song
-            audio = MP4(os.path.join(DOWNLOADS_FOLDER, filename))
-            audio["\xa9nam"] = info.get("title", "Unknown Title")
-            audio["\xa9ART"] = info.get("artist", "Unknown Artist")
-            audio["\xa9alb"] = info.get("album", "Unknown Album")
-            audio["\xa9day"] = str(info.get("release_year", "Unknown Year"))
-            audio.save()
+            try:
+                audio = MP4(os.path.join(DOWNLOADS_FOLDER, filename))
+                audio["\xa9nam"] = info.get("title", "Unknown Title")
+                audio["\xa9ART"] = info.get("artist", "Unknown Artist")
+                audio["\xa9alb"] = info.get("album", "Unknown Album")
+                audio["\xa9day"] = str(info.get("release_year", "Unknown Year"))
+                audio.save()
 
-            # Print the duration for debugging
-            print_duration(filename)
+                # Print the duration for debugging
+                print_duration(filename)
 
-            # Download thumbnail
-            thumbnail_url = info.get("thumbnails", [{}])[0].get("url")
-            if thumbnail_url:
-                thumbnail_response = requests.get(thumbnail_url)
-                if thumbnail_response.status_code == 200:
-                    # Add thumbnail to the song file
-                    with open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "wb") as f:
-                        f.write(thumbnail_response.content)
+                # Download thumbnail
+                thumbnail_url = info.get("thumbnails", [{}])[0].get("url")
+                if thumbnail_url:
+                    thumbnail_response = requests.get(thumbnail_url)
+                    if thumbnail_response.status_code == 200:
+                        # Add thumbnail to the song file
+                        with open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "wb") as f:
+                            f.write(thumbnail_response.content)
 
-                    audio["covr"] = [
-                        MP4Cover(open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "rb").read(), MP4Cover.FORMAT_JPEG)
-                    ]
-                    audio.save()
+                        audio["covr"] = [
+                            MP4Cover(open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "rb").read(), MP4Cover.FORMAT_JPEG)
+                        ]
+                        audio.save()
 
-                    # Remove temporary thumbnail file
-                    os.remove(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"))
+                        # Remove temporary thumbnail file
+                        os.remove(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"))
+            except Exception as e:
+                logging.error(f"Error adding metadata: {str(e)}")
+                print(f"Error adding metadata: {str(e)}")
 
             return filename, info
         except Exception as e:
