@@ -80,16 +80,23 @@ async def handle_song_url(client, message):
     # Download and add metadata to the song
     filename, info = await download_and_add_metadata(url, chat_id, sent_message)
     if filename and info:
-        with open(os.path.join(DOWNLOADS_FOLDER, filename), 'rb') as song_file:
-            caption = f"{info['title']} - {info.get('abr', 'Unknown Bitrate')} kbps"
-            await app.send_audio(chat_id, song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
-        os.remove(os.path.join(DOWNLOADS_FOLDER, filename))
+        file_path = os.path.join(DOWNLOADS_FOLDER, filename)
+        if os.path.exists(file_path):
+            with open(file_path, 'rb') as song_file:
+                caption = f"{info['title']} - {info.get('abr', 'Unknown Bitrate')} kbps"
+                await app.send_audio(chat_id, song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
+            try:
+                os.remove(file_path)
+            except FileNotFoundError:
+                logging.error(f"File not found: {file_path}")
+        else:
+            logging.error(f"File not found: {file_path}")
         await sent_message.delete()
     else:
         await sent_message.edit_text("Error: Unable to download or add metadata to the song.")
 
     user_states[chat_id]["downloading"] = False
-
+    
 # Function to download song from URL and add metadata
 async def download_and_add_metadata(url, chat_id, sent_message):
     ydl_opts = {
