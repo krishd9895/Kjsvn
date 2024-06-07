@@ -153,7 +153,7 @@ async def add_metadata(json_data, song_filename, chat_id, message_id):
         logging.error(f"Error adding metadata: {str(e)}")
 
 # Function to extract JSON metadata from URL
-def extract_json(url, chat_id, message_id):
+async def extract_json(url, chat_id, message_id):
     ydl_opts = {
         'skip_download': True,  # Skip downloading the video
         'print_json': True
@@ -162,10 +162,10 @@ def extract_json(url, chat_id, message_id):
     with YoutubeDL(ydl_opts) as ydl:
         try:
             result = ydl.extract_info(url, download=False)
-            asyncio.run(app.edit_message_text("Metadata extracted successfully!", chat_id, message_id))
+            await app.edit_message_text("Metadata extracted successfully!", chat_id, message_id)
             return result
         except Exception as e:
-            asyncio.run(app.edit_message_text(f"Error extracting JSON metadata: {str(e)}", chat_id, message_id))
+            await app.edit_message_text(f"Error extracting JSON metadata: {str(e)}", chat_id, message_id)
             logging.error(f"Error extracting JSON metadata: {str(e)}")
             return None
 
