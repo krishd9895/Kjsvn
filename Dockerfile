@@ -13,6 +13,9 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . .
 
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip
+
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
