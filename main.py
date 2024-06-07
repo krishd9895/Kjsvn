@@ -82,7 +82,7 @@ async def handle_song_url(client, message):
     sent_message = await message.reply_text("Processing...")
 
     # Extract metadata from the URL
-    json_data = extract_json(url, chat_id, sent_message.id)
+    json_data = await extract_json(url, chat_id, sent_message.id)
     if json_data:
         filename, info = await download_song(url, chat_id, sent_message.id)
         if filename and info:
@@ -98,7 +98,7 @@ async def handle_song_url(client, message):
         await app.edit_message_text("Error: Unable to extract metadata or download the song.", chat_id, sent_message.id)
 
     user_states[chat_id]["downloading"] = False
-
+    
 # Function to download song from URL
 async def download_song(url, chat_id, message_id):
     ydl_opts = {
