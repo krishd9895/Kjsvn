@@ -84,23 +84,21 @@ async def handle_song_url(client, message):
     # Extract metadata from the URL
     json_data = await extract_json(url, chat_id, sent_message)
     if json_data:
-        filename, info = await download_song(url, chat_id, sent_message.id)
+        filename, info = await download_song(url, chat_id, sent_message)
         if filename and info:
-            await add_metadata(json_data, filename, chat_id, sent_message.id)
+            await add_metadata(json_data, filename, chat_id, sent_message)
             with open(os.path.join(DOWNLOADS_FOLDER, filename), 'rb') as song_file:
                 caption = f"{info['title']} - {info.get('abr', 'Unknown Bitrate')} kbps"
                 await app.send_audio(chat_id, song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
             os.remove(os.path.join(DOWNLOADS_FOLDER, filename))
-            await app.delete_messages(chat_id, sent_message.id)
-        else:
-            await app.edit_message_text("Error: Unable to download the song.", chat_id, sent_message.id)
+            await sent_message.delete()
     else:
-        await app.edit_message_text("Error: Unable to extract metadata or download the song.", chat_id, sent_message.id)
+        await sent_message.edit_text("Error: Unable to extract metadata or download the song.")
 
     user_states[chat_id]["downloading"] = False
     
 # Function to download song from URL
-async def download_song(url, chat_id, message_id):
+async def download_song(url, chat_id, sent_message):
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': os.path.join(DOWNLOADS_FOLDER, '%(title)s.%(ext)s'),
@@ -114,10 +112,10 @@ async def download_song(url, chat_id, message_id):
         try:
             info = ydl.extract_info(url, download=True)
             filename = f"{sanitize_filename(info.get('title', 'unknown'))}.{info.get('ext', 'mp4')}"
-            await app.edit_message_text(f"Uploading as: {filename}", chat_id, message_id)
+            await sent_message.edit_text("Downloading...")
             return filename, info
         except Exception as e:
-            await app.edit_message_text(f"Error downloading the song: {str(e)}", chat_id, message_id)
+            await sent_message.edit_text(f"Error: {str(e)}")
             logging.error(f"Error downloading the song: {str(e)}")
             return None, None
 
