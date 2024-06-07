@@ -96,11 +96,15 @@ async def handle_song_url(client, message):
         await sent_message.edit_text("Error: Unable to extract metadata or download the song.")
 
     user_states[chat_id]["downloading"] = False
-    
+
 # Function to download song from URL
 async def download_song(url, chat_id, sent_message):
     ydl_opts = {
         'format': 'bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'm4a',
+        }],
         'outtmpl': os.path.join(DOWNLOADS_FOLDER, '%(title)s.%(ext)s'),
     }
 
@@ -111,7 +115,7 @@ async def download_song(url, chat_id, sent_message):
     with YoutubeDL(ydl_opts) as ydl:
         try:
             info = ydl.extract_info(url, download=True)
-            filename = f"{sanitize_filename(info.get('title', 'unknown'))}.{info.get('ext', 'mp4')}"
+            filename = f"{sanitize_filename(info.get('title', 'unknown'))}.m4a"
             await sent_message.edit_text("Downloading...")
             return filename, info
         except Exception as e:
@@ -129,6 +133,9 @@ async def add_metadata(json_data, song_filename, chat_id, message_id):
         audio["\xa9alb"] = json_data.get("album", "Unknown Album")
         audio["\xa9day"] = str(json_data.get("release_year", "Unknown Year"))
         audio.save()
+
+        # Print the duration for debugging
+        print_duration(song_filename)
 
         # Download thumbnail
         thumbnail_url = json_data.get("thumbnails", [{}])[0].get("url")
@@ -150,6 +157,12 @@ async def add_metadata(json_data, song_filename, chat_id, message_id):
         await app.edit_message_text(f"Error adding metadata: {str(e)}", chat_id, message_id)
         logging.error(f"Error adding metadata: {str(e)}")
 
+# Function to print the duration of the audio file
+def print_duration(song_filename):
+    audio = MP4(os.path.join(DOWNLOADS_FOLDER, song_filename))
+    duration = audio.info.length
+    print(f"Duration: {duration} seconds")
+
 # Function to extract JSON metadata from URL
 async def extract_json(url, chat_id, sent_message):
     ydl_opts = {
@@ -166,6 +179,7 @@ async def extract_json(url, chat_id, sent_message):
             await sent_message.edit_text(f"Error extracting JSON metadata: {str(e)}")
             logging.error(f"Error extracting JSON metadata: {str(e)}")
             return None
+
             
 # Function to check if a string contains a URL
 def contains_url(text):
