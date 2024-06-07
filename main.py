@@ -137,7 +137,7 @@ async def download_song(url, chat_id, message_id):
             filename = ydl.prepare_filename(info)
             sanitized_filename = sanitize_filename(filename)
             os.rename(filename, sanitized_filename)  # Rename the file to the sanitized filename
-            await app.edit_message_text(f"Uploading as: {sanitized_filename}", chat_id, message_id)
+            await app.edit_message_text("Uploading...", chat_id, message_id)  # Simpler message text
             return sanitized_filename, info
         except Exception as e:
             await app.edit_message_text(f"Error downloading the song: {str(e)}", chat_id, message_id)
@@ -184,10 +184,10 @@ def extract_json(url, chat_id, message_id):
     with YoutubeDL(ydl_opts) as ydl:
         try:
             result = ydl.extract_info(url, download=False)
-            app.edit_message_text("Metadata extracted successfully!", chat_id, message_id)
+            asyncio.run(app.edit_message_text("Metadata extracted successfully!", chat_id, message_id))
             return result
         except Exception as e:
-            app.edit_message_text(f"Error extracting JSON metadata: {str(e)}", chat_id, message_id)
+            asyncio.run(app.edit_message_text(f"Error extracting JSON metadata: {str(e)}", chat_id, message_id))
             logging.error(f"Error extracting JSON metadata: {str(e)}")
             return None
 
