@@ -82,18 +82,18 @@ async def handle_song_url(client, message):
     sent_message = await message.reply_text("Processing...")
 
     # Extract metadata from the URL
-    json_data = extract_json(url, chat_id, sent_message.message_id)
+    json_data = extract_json(url, chat_id, sent_message.id)
     if json_data:
-        filename, info = await download_song(url, chat_id, sent_message.message_id)
+        filename, info = await download_song(url, chat_id, sent_message.id)
         if filename:
-            await add_metadata(json_data, filename, chat_id, sent_message.message_id)
+            await add_metadata(json_data, filename, chat_id, sent_message.id)
             with open(os.path.join(DOWNLOADS_FOLDER, filename), 'rb') as song_file:
                 caption = f"{info['title']} - {info['abr']} kbps" if 'abr' in info else info['title']
                 await app.send_audio(chat_id, song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
             os.remove(os.path.join(DOWNLOADS_FOLDER, filename))
-            await app.delete_messages(chat_id, sent_message.message_id)
+            await app.delete_messages(chat_id, sent_message.id)
     else:
-        await app.edit_message_text("Error: Unable to extract metadata or download the song.", chat_id, sent_message.message_id)
+        await app.edit_message_text("Error: Unable to extract metadata or download the song.", chat_id, sent_message.id)
 
     user_states[chat_id]["downloading"] = False
 
@@ -108,7 +108,7 @@ async def search_and_send_results(chat_id, song_name):
     data = await saavn.search_songs(song_name)
 
     if data and 'data' in data and data['data']:
-        result = data['data']
+        result = data['data'][0]  # Take only the first item
         title = result.get('title', '')
         album = result.get('album', '')
         url = result.get('url', '')
