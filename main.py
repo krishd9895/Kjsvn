@@ -81,24 +81,21 @@ async def handle_song_url(client, message):
 
     sent_message = await message.reply_text("Processing...")
 
-    # Extract metadata from the URL
-    json_data = await extract_json(url, chat_id, sent_message)
-    if json_data:
-        filename, info = await download_song(url, chat_id, sent_message)
-        if filename and info:
-            await add_metadata(json_data, filename, chat_id, sent_message)
-            with open(os.path.join(DOWNLOADS_FOLDER, filename), 'rb') as song_file:
-                caption = f"{info['title']} - {info.get('abr', 'Unknown Bitrate')} kbps"
-                await app.send_audio(chat_id, song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
-            os.remove(os.path.join(DOWNLOADS_FOLDER, filename))
-            await sent_message.delete()
+    # Download and add metadata to the song
+    filename, info = await download_and_add_metadata(url, chat_id, sent_message)
+    if filename and info:
+        with open(os.path.join(DOWNLOADS_FOLDER, filename), 'rb') as song_file:
+            caption = f"{info['title']} - {info.get('abr', 'Unknown Bitrate')} kbps"
+            await app.send_audio(chat_id, song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
+        os.remove(os.path.join(DOWNLOADS_FOLDER, filename))
+        await sent_message.delete()
     else:
-        await sent_message.edit_text("Error: Unable to extract metadata or download the song.")
+        await sent_message.edit_text("Error: Unable to download or add metadata to the song.")
 
     user_states[chat_id]["downloading"] = False
 
-# Function to download song from URL
-async def download_song(url, chat_id, sent_message):
+# Function to download song from URL and add metadata
+async def download_and_add_metadata(url, chat_id, sent_message):
     ydl_opts = {
         'format': 'bestaudio/best',
         'postprocessors': [{
@@ -116,74 +113,47 @@ async def download_song(url, chat_id, sent_message):
         try:
             info = ydl.extract_info(url, download=True)
             filename = f"{sanitize_filename(info.get('title', 'unknown'))}.m4a"
-            await sent_message.edit_text("Downloading...")
+            await sent_message.edit_text("Downloading and adding metadata...")
+
+            # Add metadata to the downloaded song
+            audio = MP4(os.path.join(DOWNLOADS_FOLDER, filename))
+            audio["\xa9nam"] = info.get("title", "Unknown Title")
+            audio["\xa9ART"] = info.get("artist", "Unknown Artist")
+            audio["\xa9alb"] = info.get("album", "Unknown Album")
+            audio["\xa9day"] = str(info.get("release_year", "Unknown Year"))
+            audio.save()
+
+            # Print the duration for debugging
+            print_duration(filename)
+
+            # Download thumbnail
+            thumbnail_url = info.get("thumbnails", [{}])[0].get("url")
+            if thumbnail_url:
+                thumbnail_response = requests.get(thumbnail_url)
+                if thumbnail_response.status_code == 200:
+                    # Add thumbnail to the song file
+                    with open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "wb") as f:
+                        f.write(thumbnail_response.content)
+
+                    audio["covr"] = [
+                        MP4Cover(open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "rb").read(), MP4Cover.FORMAT_JPEG)
+                    ]
+                    audio.save()
+
+                    # Remove temporary thumbnail file
+                    os.remove(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"))
+
             return filename, info
         except Exception as e:
             await sent_message.edit_text(f"Error: {str(e)}")
-            logging.error(f"Error downloading the song: {str(e)}")
+            logging.error(f"Error downloading or adding metadata to the song: {str(e)}")
             return None, None
-
-# Function to add metadata to downloaded song
-async def add_metadata(json_data, song_filename, chat_id, message_id):
-    try:
-        # Add metadata to the downloaded song
-        audio = MP4(os.path.join(DOWNLOADS_FOLDER, song_filename))
-        audio["\xa9nam"] = json_data.get("title", "Unknown Title")
-        audio["\xa9ART"] = json_data.get("artist", "Unknown Artist")
-        audio["\xa9alb"] = json_data.get("album", "Unknown Album")
-        audio["\xa9day"] = str(json_data.get("release_year", "Unknown Year"))
-        audio.save()
-
-        # Print the duration for debugging
-        print_duration(song_filename)
-
-        # Download thumbnail
-        thumbnail_url = json_data.get("thumbnails", [{}])[0].get("url")
-        if thumbnail_url:
-            thumbnail_response = requests.get(thumbnail_url)
-            if thumbnail_response.status_code == 200:
-                # Add thumbnail to the song file
-                with open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "wb") as f:
-                    f.write(thumbnail_response.content)
-
-                audio["covr"] = [
-                    MP4Cover(open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "rb").read(), MP4Cover.FORMAT_JPEG)
-                ]
-                audio.save()
-
-                # Remove temporary thumbnail file
-                os.remove(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"))
-    except Exception as e:
-        await app.edit_message_text(f"Error adding metadata: {str(e)}", chat_id, message_id)
-        logging.error(f"Error adding metadata: {str(e)}")
 
 # Function to print the duration of the audio file
 def print_duration(song_filename):
     audio = MP4(os.path.join(DOWNLOADS_FOLDER, song_filename))
     duration = audio.info.length
     print(f"Duration: {duration} seconds")
-
-# Function to extract JSON metadata from URL
-async def extract_json(url, chat_id, sent_message):
-    ydl_opts = {
-        'skip_download': True,  # Skip downloading the video
-        'print_json': True
-    }
-
-    with YoutubeDL(ydl_opts) as ydl:
-        try:
-            result = ydl.extract_info(url, download=False)
-            await sent_message.edit_text("Metadata extracted successfully!")
-            return result
-        except Exception as e:
-            await sent_message.edit_text(f"Error extracting JSON metadata: {str(e)}")
-            logging.error(f"Error extracting JSON metadata: {str(e)}")
-            return None
-
-            
-# Function to check if a string contains a URL
-def contains_url(text):
-    return bool(url_pattern.search(text))
 
 # Cleanup at the beginning of the script
 cleanup()
