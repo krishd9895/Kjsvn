@@ -85,20 +85,19 @@ async def handle_song_url(client, message):
     json_data = extract_json(url, chat_id, sent_message.id)
     if json_data:
         filename, info = await download_song(url, chat_id, sent_message.id)
-        if filename:
+        if filename and info:
             await add_metadata(json_data, filename, chat_id, sent_message.id)
             with open(os.path.join(DOWNLOADS_FOLDER, filename), 'rb') as song_file:
-                caption = f"{info['title']} - {info['abr']} kbps" if 'abr' in info else info['title']
+                caption = f"{info['title']} - {info.get('abr', 'Unknown Bitrate')} kbps"
                 await app.send_audio(chat_id, song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
             os.remove(os.path.join(DOWNLOADS_FOLDER, filename))
             await app.delete_messages(chat_id, sent_message.id)
+        else:
+            await app.edit_message_text("Error: Unable to download the song.", chat_id, sent_message.id)
     else:
         await app.edit_message_text("Error: Unable to extract metadata or download the song.", chat_id, sent_message.id)
 
     user_states[chat_id]["downloading"] = False
-
-
-
 
 # Function to download song from URL
 async def download_song(url, chat_id, message_id):
@@ -108,51 +107,47 @@ async def download_song(url, chat_id, message_id):
     }
 
     def sanitize_filename(filename):
-        # Define a regex pattern to match any character not allowed in filenames
         disallowed_chars = r'[\\/:*?"<>|]'
-        # Replace disallowed characters with an underscore
         return re.sub(disallowed_chars, '_', filename)
 
     with YoutubeDL(ydl_opts) as ydl:
         try:
             info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            sanitized_filename = sanitize_filename(filename)
-            os.rename(filename, sanitized_filename)  # Rename the file to the sanitized filename
-            await app.edit_message_text(f"Uploading as: {sanitized_filename}", chat_id, message_id)  # Corrected the parameters
-            return sanitized_filename, info
+            filename = f"{sanitize_filename(info.get('title', 'unknown'))}.{info.get('ext', 'mp4')}"
+            await app.edit_message_text(f"Uploading as: {filename}", chat_id, message_id)
+            return filename, info
         except Exception as e:
-            await app.edit_message_text(f"Error downloading the song: {str(e)}", chat_id, message_id)  # Corrected the parameters
+            await app.edit_message_text(f"Error downloading the song: {str(e)}", chat_id, message_id)
             logging.error(f"Error downloading the song: {str(e)}")
             return None, None
-
 
 # Function to add metadata to downloaded song
 async def add_metadata(json_data, song_filename, chat_id, message_id):
     try:
         # Add metadata to the downloaded song
         audio = MP4(os.path.join(DOWNLOADS_FOLDER, song_filename))
-        audio["\xa9nam"] = json_data["title"]
+        audio["\xa9nam"] = json_data.get("title", "Unknown Title")
         audio["\xa9ART"] = json_data.get("artist", "Unknown Artist")
         audio["\xa9alb"] = json_data.get("album", "Unknown Album")
         audio["\xa9day"] = str(json_data.get("release_year", "Unknown Year"))
         audio.save()
 
         # Download thumbnail
-        thumbnail_url = json_data["thumbnails"][0]["url"]
-        thumbnail_response = requests.get(thumbnail_url)
+        thumbnail_url = json_data.get("thumbnails", [{}])[0].get("url")
+        if thumbnail_url:
+            thumbnail_response = requests.get(thumbnail_url)
+            if thumbnail_response.status_code == 200:
+                # Add thumbnail to the song file
+                with open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "wb") as f:
+                    f.write(thumbnail_response.content)
 
-        # Add thumbnail to the song file
-        with open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "wb") as f:
-            f.write(thumbnail_response.content)
+                audio["covr"] = [
+                    MP4Cover(open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "rb").read(), MP4Cover.FORMAT_JPEG)
+                ]
+                audio.save()
 
-        audio["covr"] = [
-            MP4Cover(open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "rb").read(), MP4Cover.FORMAT_JPEG)
-        ]
-        audio.save()
-
-        # Remove temporary thumbnail file
-        os.remove(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"))
+                # Remove temporary thumbnail file
+                os.remove(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"))
     except Exception as e:
         await app.edit_message_text(f"Error adding metadata: {str(e)}", chat_id, message_id)
         logging.error(f"Error adding metadata: {str(e)}")
