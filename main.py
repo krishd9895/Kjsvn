@@ -82,7 +82,7 @@ async def handle_song_url(client, message):
     sent_message = await message.reply_text("Processing...")
 
     # Extract metadata from the URL
-    json_data = await extract_json(url, chat_id, sent_message.id)
+    json_data = await extract_json(url, chat_id, sent_message)
     if json_data:
         filename, info = await download_song(url, chat_id, sent_message.id)
         if filename and info:
@@ -153,7 +153,7 @@ async def add_metadata(json_data, song_filename, chat_id, message_id):
         logging.error(f"Error adding metadata: {str(e)}")
 
 # Function to extract JSON metadata from URL
-async def extract_json(url, chat_id, message_id):
+async def extract_json(url, chat_id, sent_message):
     ydl_opts = {
         'skip_download': True,  # Skip downloading the video
         'print_json': True
@@ -162,13 +162,13 @@ async def extract_json(url, chat_id, message_id):
     with YoutubeDL(ydl_opts) as ydl:
         try:
             result = ydl.extract_info(url, download=False)
-            await app.edit_message_text("Metadata extracted successfully!", chat_id, message_id)
+            await sent_message.edit_text("Metadata extracted successfully!")
             return result
         except Exception as e:
-            await app.edit_message_text(f"Error extracting JSON metadata: {str(e)}", chat_id, message_id)
+            await sent_message.edit_text(f"Error extracting JSON metadata: {str(e)}")
             logging.error(f"Error extracting JSON metadata: {str(e)}")
             return None
-
+            
 # Function to check if a string contains a URL
 def contains_url(text):
     return bool(url_pattern.search(text))
