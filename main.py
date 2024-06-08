@@ -85,10 +85,6 @@ async def handle_song_url(client, message):
             with open(file_path, 'rb') as song_file:
                 caption = f"{info['title']} - {info.get('abr', 'Unknown Bitrate')} kbps"
                 await app.send_audio(chat_id, song_file, title=info["title"], performer=info.get("artist", "Unknown Artist"), caption=caption)
-            try:
-                os.remove(file_path)
-            except FileNotFoundError:
-                logging.error(f"File not found: {file_path}")
         else:
             logging.error(f"File not found: {file_path}")
         await sent_message.delete()
@@ -114,44 +110,48 @@ async def download_and_add_metadata(url, chat_id, sent_message):
             filename = f"{sanitize_filename(info.get('title', 'unknown'))}.{info.get('ext', 'mp3')}"
             await sent_message.edit_text("Downloading and adding metadata...")
 
+            file_path = os.path.join(DOWNLOADS_FOLDER, filename)
+
             # Add metadata to the downloaded song
             try:
-                audio = MP4(os.path.join(DOWNLOADS_FOLDER, filename))
-                audio["\xa9nam"] = info.get("title", "Unknown Title")
-                audio["\xa9ART"] = info.get("artist", "Unknown Artist")
-                audio["\xa9alb"] = info.get("album", "Unknown Album")
-                audio["\xa9day"] = str(info.get("release_year", "Unknown Year"))
-                audio.save()
+                if os.path.exists(file_path):
+                    audio = MP4(file_path)
+                    audio["\xa9nam"] = info.get("title", "Unknown Title")
+                    audio["\xa9ART"] = info.get("artist", "Unknown Artist")
+                    audio["\xa9alb"] = info.get("album", "Unknown Album")
+                    audio["\xa9day"] = str(info.get("release_year", "Unknown Year"))
+                    audio.save()
 
-                # Print the duration for debugging
-                print_duration(filename)
+                    # Print the duration for debugging
+                    print_duration(filename)
 
-                # Download thumbnail
-                thumbnail_url = info.get("thumbnails", [{}])[0].get("url")
-                if thumbnail_url:
-                    thumbnail_response = requests.get(thumbnail_url)
-                    if thumbnail_response.status_code == 200:
-                        # Add thumbnail to the song file
-                        with open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "wb") as f:
-                            f.write(thumbnail_response.content)
+                    # Download thumbnail
+                    thumbnail_url = info.get("thumbnails", [{}])[0].get("url")
+                    if thumbnail_url:
+                        thumbnail_response = requests.get(thumbnail_url)
+                        if thumbnail_response.status_code == 200:
+                            # Add thumbnail to the song file
+                            with open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "wb") as f:
+                                f.write(thumbnail_response.content)
 
-                        audio["covr"] = [
-                            MP4Cover(open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "rb").read(), MP4Cover.FORMAT_JPEG)
-                        ]
-                        audio.save()
+                            audio["covr"] = [
+                                MP4Cover(open(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"), "rb").read(), MP4Cover.FORMAT_JPEG)
+                            ]
+                            audio.save()
 
-                        # Remove temporary thumbnail file
-                        os.remove(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"))
+                            # Remove temporary thumbnail file
+                            os.remove(os.path.join(DOWNLOADS_FOLDER, "temp.jpg"))
+                else:
+                    logging.warning(f"File not found: {file_path}. Skipping metadata addition.")
             except Exception as e:
                 logging.error(f"Error adding metadata: {str(e)}")
-                print(f"Error adding metadata: {str(e)}")
 
             return filename, info
         except Exception as e:
             await sent_message.edit_text(f"Error: {str(e)}")
             logging.error(f"Error downloading or adding metadata to the song: {str(e)}")
             return None, None
-
+            
 # Function to print the duration of the audio file
 def print_duration(song_filename):
     audio = MP4(os.path.join(DOWNLOADS_FOLDER, song_filename))
