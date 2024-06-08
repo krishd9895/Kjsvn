@@ -100,11 +100,7 @@ async def handle_song_url(client, message):
 # Function to download song from URL and add metadata
 async def download_and_add_metadata(url, chat_id, sent_message):
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'm4a',
-        }],
+        'format': 'bestaudio[ext=m4a]/bestaudio[ext=mp3]',
         'outtmpl': os.path.join(DOWNLOADS_FOLDER, '%(title)s.%(ext)s'),
     }
 
@@ -115,7 +111,7 @@ async def download_and_add_metadata(url, chat_id, sent_message):
     with YoutubeDL(ydl_opts) as ydl:
         try:
             info = ydl.extract_info(url, download=True)
-            filename = f"{sanitize_filename(info.get('title', 'unknown'))}.m4a"
+            filename = f"{sanitize_filename(info.get('title', 'unknown'))}.{info.get('ext', 'mp3')}"
             await sent_message.edit_text("Downloading and adding metadata...")
 
             # Add metadata to the downloaded song
